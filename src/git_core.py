@@ -16,10 +16,19 @@ from models import (
 
 
 class GitError(RuntimeError):
+    """Exception raised for Git-related errors."""
     pass
 
 
 def get_repos_root() -> Path:
+    """Get the root directory path for local repositories.
+
+    Checks the REPOS_ROOT environment variable first. If not set, defaults
+    to a 'repos' directory in the current working directory.
+
+    Returns:
+        Path: The resolved absolute path to the repositories root directory.
+    """
     env = os.getenv("REPOS_ROOT")
     if env:
         return Path(env).expanduser().resolve()
@@ -27,6 +36,17 @@ def get_repos_root() -> Path:
 
 
 def resolve_repo_path(block_ref: BlockRef) -> Path:
+    """Resolve the local file system path for a repository.
+
+    Args:
+        block_ref: BlockRef containing the repository name to resolve.
+
+    Returns:
+        Path: The absolute path to the repository directory.
+
+    Raises:
+        GitError: If the repository path does not exist on the file system.
+    """
     root = get_repos_root()
     repo_path = root  / block_ref.repo_name
     if not repo_path.exists():
@@ -35,6 +55,18 @@ def resolve_repo_path(block_ref: BlockRef) -> Path:
 
 
 def run_git(args: List[str], repo_path: Path) -> str:
+    """Execute a git command in the specified repository directory.
+
+    Args:
+        args: List of git command arguments (without the 'git' prefix).
+        repo_path: Path to the repository directory where the command should run.
+
+    Returns:
+        str: The stdout output from the git command.
+
+    Raises:
+        GitError: If the git command fails (non-zero exit code).
+    """
     cmd = ["git", *args]
     result = subprocess.run(
         cmd,
@@ -49,6 +81,19 @@ def run_git(args: List[str], repo_path: Path) -> str:
 
 
 def read_file_at_ref(block_ref: BlockRef) -> Tuple[List[str], int]:
+    """Read file contents at a specific git reference (branch, commit, etc.).
+
+    Args:
+        block_ref: BlockRef specifying the repository, ref, and file path.
+
+    Returns:
+        Tuple[List[str], int]: A tuple containing:
+            - List of file lines (as strings)
+            - Total number of lines in the file
+
+    Raises:
+        GitError: If the git command fails or the file cannot be read.
+    """
     repo_path = resolve_repo_path(block_ref)
     spec = f"{block_ref.ref}:{block_ref.path}"
     output = run_git(["show", spec], repo_path)
@@ -57,6 +102,15 @@ def read_file_at_ref(block_ref: BlockRef) -> Tuple[List[str], int]:
 
 
 def guess_language_from_path(path: str) -> str | None:
+    """Infer the programming language from a file path extension.
+
+    Args:
+        path: File path string to analyze.
+
+    Returns:
+        str | None: The detected language name (e.g., 'python', 'javascript')
+            or None if the language cannot be determined from the extension.
+    """
     suffix = Path(path).suffix.lower()
     if suffix == ".py":
         return "python"
@@ -82,6 +136,23 @@ def guess_language_from_path(path: str) -> str | None:
 
 
 def get_code_context(block_ref: BlockRef, context_lines: int = 10) -> CodeContext:
+    """Retrieve a code block with surrounding context lines.
+
+    Extracts the specified code block and includes additional lines above and
+    below for context. Also detects the programming language from the file path.
+
+    Args:
+        block_ref: BlockRef specifying the code block to retrieve.
+        context_lines: Number of lines to include above and below the block
+            (default: 10).
+
+    Returns:
+        CodeContext: A model containing the code block, surrounding code,
+            line numbers, total file lines, and detected language.
+
+    Raises:
+        GitError: If the line range is invalid or the file cannot be read.
+    """
     lines, total = read_file_at_ref(block_ref)
 
     if block_ref.start_line < 1 or block_ref.end_line > total:
@@ -114,6 +185,19 @@ def get_code_context(block_ref: BlockRef, context_lines: int = 10) -> CodeContex
 
 
 def parse_blame_porcelain(output: str, block_ref: BlockRef) -> List[BlameEntry]:
+    """Parse git blame porcelain format output into BlameEntry objects.
+
+    Parses the structured output from 'git blame --line-porcelain' command
+    and converts it into a list of BlameEntry models with commit, author,
+    and code information for each line.
+
+    Args:
+        output: Raw output string from git blame --line-porcelain command.
+        block_ref: BlockRef used to associate entries with the code block.
+
+    Returns:
+        List[BlameEntry]: List of BlameEntry objects, one per line in the block.
+    """
     entries: List[BlameEntry] = []
     current: dict | None = None
 
@@ -164,6 +248,21 @@ def parse_blame_porcelain(output: str, block_ref: BlockRef) -> List[BlameEntry]:
 
 
 def get_blame_entries(block_ref: BlockRef) -> List[BlameEntry]:
+    """Get git blame information for a specific code block.
+
+    Executes git blame to retrieve line-by-line authorship and commit
+    information for the specified code block range.
+
+    Args:
+        block_ref: BlockRef specifying the repository, ref, file, and line range.
+
+    Returns:
+        List[BlameEntry]: List of BlameEntry objects with blame information
+            for each line in the block.
+
+    Raises:
+        GitError: If the git blame command fails.
+    """
     repo_path = resolve_repo_path(block_ref)
     args = [
         "blame",
@@ -179,11 +278,44 @@ def get_blame_entries(block_ref: BlockRef) -> List[BlameEntry]:
 
 
 def get_blame_block(block_ref: BlockRef) -> BlameBlock:
+    """Get complete blame block information for a code range.
+
+    Wraps get_blame_entries to return a BlameBlock model containing all
+    blame entries for the specified code block.
+
+    Args:
+        block_ref: BlockRef specifying the code block to analyze.
+
+    Returns:
+        BlameBlock: A model containing all blame entries for the block.
+
+    Raises:
+        GitError: If the git blame command fails.
+    """
     entries = get_blame_entries(block_ref)
     return BlameBlock(block_ref=block_ref, entries=entries)
 
 
 def get_commit_summaries_for_block(block_ref: BlockRef, max_commits: int = 10) -> Tuple[BlameBlock | None, List[CommitSummary]]:
+    """Retrieve commit history for a code block.
+
+    Gets blame information for the block, extracts unique commit SHAs,
+    and fetches detailed commit information (author, date, message, diff)
+    for up to max_commits distinct commits.
+
+    Args:
+        block_ref: BlockRef specifying the code block to analyze.
+        max_commits: Maximum number of distinct commits to retrieve
+            (default: 10).
+
+    Returns:
+        Tuple[BlameBlock | None, List[CommitSummary]]: A tuple containing:
+            - BlameBlock with all blame entries (or None if blame fails)
+            - List of CommitSummary objects with commit details
+
+    Raises:
+        GitError: If git commands fail during execution.
+    """
     blame_block = get_blame_block(block_ref)
     if not blame_block.entries:
         return blame_block, []
@@ -238,6 +370,21 @@ def get_commit_summaries_for_block(block_ref: BlockRef, max_commits: int = 10) -
 
 
 def build_history_context(block_ref: BlockRef, max_commits: int = 10) -> HistoryContext:
+    """Build complete history context with blame and commit information.
+
+    Aggregates git blame data and commit history for a code block into a
+    single HistoryContext model. Handles errors gracefully by returning
+    empty blame/commits if git operations fail.
+
+    Args:
+        block_ref: BlockRef specifying the code block to analyze.
+        max_commits: Maximum number of commits to include in the history
+            (default: 10).
+
+    Returns:
+        HistoryContext: A model containing blame information, commit summaries,
+            and PR discussions (PRs currently empty, reserved for future use).
+    """
     try:
         blame_block, commits = get_commit_summaries_for_block(block_ref, max_commits=max_commits)
     except GitError:

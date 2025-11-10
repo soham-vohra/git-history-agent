@@ -14,6 +14,11 @@ class BlockRef(BaseModel):
     end_line: int = Field(..., ge=1)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert the BlockRef model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the BlockRef model.
+        """
         return self.model_dump()
 
 
@@ -29,6 +34,11 @@ class CodeContext(BaseModel):
     language: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert the CodeContext model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the CodeContext model.
+        """
         return self.model_dump()
 
 
@@ -46,6 +56,11 @@ class BlameEntry(BaseModel):
     filename: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert the BlameEntry model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the BlameEntry model.
+        """
         return self.model_dump()
 
 
@@ -56,6 +71,11 @@ class BlameBlock(BaseModel):
     entries: List[BlameEntry] = Field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:  # pragma: no cover
+        """Convert the BlameBlock model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the BlameBlock model.
+        """
         return self.model_dump()
 
 
@@ -70,6 +90,11 @@ class CommitSummary(BaseModel):
     pr_numbers: Optional[List[int]] = None
 
     def to_dict(self) -> Dict[str, Any]:  # pragma: no cover
+        """Convert the CommitSummary model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the CommitSummary model.
+        """
         return self.model_dump()
 
 
@@ -85,6 +110,11 @@ class PRDiscussionSummary(BaseModel):
     key_comments: List[str] = Field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:  # pragma: no cover
+        """Convert the PRDiscussionSummary model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the PRDiscussionSummary model.
+        """
         return self.model_dump()
 
 
@@ -96,6 +126,11 @@ class HistoryContext(BaseModel):
     prs: List[PRDiscussionSummary] = Field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:  # pragma: no cover
+        """Convert the HistoryContext model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the HistoryContext model.
+        """
         return self.model_dump()
 
 

@@ -19,11 +19,27 @@ load_dotenv()
 
 
 class GitHistoryAgent:
+    """Agent that uses LLM with tool calling to answer questions about code history."""
+    
     def __init__(self, model: str = "gpt-4.1-mini"):
+        """Initialize the GitHistoryAgent with an OpenAI client.
+
+        Args:
+            model: The OpenAI model name to use for chat completions
+                (default: "gpt-4.1-mini").
+        """
         self.client = OpenAI()
         self.model = model
 
     def build_system_prompt(self) -> str:
+        """Construct the system prompt for the LLM.
+
+        Creates a prompt that instructs the LLM on its role as a code history
+        assistant and how to use the available tools to answer questions.
+
+        Returns:
+            str: The system prompt string for the LLM.
+        """
         return (
             "You are a code history assistant. "
             "You answer questions about a specific block of code. "
@@ -36,6 +52,15 @@ class GitHistoryAgent:
         )
 
     def _tool_definitions(self) -> List[Dict[str, Any]]:
+        """Return tool definitions for OpenAI function calling.
+
+        Defines the available tools (get_code_context and get_history_context)
+        that the LLM can call to retrieve information about code blocks.
+
+        Returns:
+            List[Dict[str, Any]]: List of tool definition dictionaries
+                compatible with OpenAI's function calling API.
+        """
         return [
             {
                 "type": "function",
@@ -91,6 +116,23 @@ class GitHistoryAgent:
         arguments: Dict[str, Any],
         block_ref: BlockRef,
     ) -> Dict[str, Any]:
+        """Execute a tool call and return the results as a dictionary.
+
+        Routes tool calls to the appropriate wrapper function and returns
+        the results in a format suitable for the LLM.
+
+        Args:
+            name: Name of the tool to execute ('get_code_context' or
+                'get_history_context').
+            arguments: Dictionary of arguments for the tool call.
+            block_ref: BlockRef specifying the code block being analyzed.
+
+        Returns:
+            Dict[str, Any]: Dictionary representation of the tool result.
+
+        Raises:
+            ValueError: If the tool name is not recognized.
+        """
         if name == "get_code_context":
             context_lines = arguments.get("context_lines", 10)
             result = get_code_context_tool(
@@ -118,6 +160,25 @@ class GitHistoryAgent:
         block_ref: BlockRef,
         question: str,
     ) -> str:
+        """Answer a question about a specific code block using LLM with tool calling.
+
+        This is the main method that orchestrates the interaction with the LLM.
+        It sends the question along with the code block reference, allows the
+        LLM to call tools as needed to gather context and history, and returns
+        the final answer.
+
+        Args:
+            block_ref: BlockRef specifying the code block to analyze.
+            question: The question to ask about the code block.
+
+        Returns:
+            str: The LLM's answer to the question, which may reference commits,
+                authors, and implementation details based on the retrieved context.
+
+        Raises:
+            GitError: If git operations fail during tool execution.
+            Exception: If the LLM API call fails or other errors occur.
+        """
         tools = self._tool_definitions()
 
         block_description = (
