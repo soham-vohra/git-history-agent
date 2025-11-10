@@ -53,7 +53,8 @@ Git History Agent is an LLM-powered backend designed to provide rich context and
 
 To start the FastAPI backend:
 ```bash
-uvicorn llm_client:app --reload --app-dir src
+cd src
+uvicorn llm_client:app --reload
 ```
 Visit the Swagger UI at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) to test the `/chat` endpoint.
 
