@@ -14,10 +14,15 @@ agent = GitHistoryAgent()
 
 from fastapi.middleware.cors import CORSMiddleware
 
+app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or ["http://localhost:5173"] if using Vite/React
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=False,  # keep this False for now to avoid the '*' + credentials weirdness
     allow_methods=["*"],
     allow_headers=["*"],
 )
