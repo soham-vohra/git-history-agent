@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 from typing import List, Tuple
 
-from models import (
+from config import settings
+from core.models import (
     BlockRef,
     CodeContext,
     BlameEntry,
@@ -20,10 +20,14 @@ class GitError(RuntimeError):
 
 
 def get_repos_root() -> Path:
-    env = os.getenv("REPOS_ROOT")
-    if env:
-        return Path(env).expanduser().resolve()
-    return (Path.cwd() / "repos").resolve()
+    """
+    Return the base directory where Git repositories are stored.
+
+    This is configured centrally via `config.settings.repo_base_dir`,
+    which is derived from environment variables (REPO_BASE_DIR or REPO_ROOT)
+    and created if it does not exist.
+    """
+    return settings.repo_base_dir
 
 
 def resolve_repo_path(block_ref: BlockRef) -> Path:

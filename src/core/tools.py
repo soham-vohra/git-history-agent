@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from models import BlockRef, CodeContext, HistoryContext
-from git_core import get_code_context, build_history_context
+from core.models import BlockRef, CodeContext, HistoryContext
+from core.git_core import get_code_context, build_history_context
 
 
 class GetCodeContextInput(BaseModel):

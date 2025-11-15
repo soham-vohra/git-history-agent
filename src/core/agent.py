@@ -6,8 +6,8 @@ from typing import Any, Dict, List
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from models import BlockRef
-from tools import (
+from core.models import BlockRef
+from core.tools import (
     GetCodeContextInput,
     GetHistoryContextInput,
     get_code_context_tool,
