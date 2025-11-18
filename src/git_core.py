@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Dict
 
 from models import (
     BlockRef,
@@ -12,7 +12,25 @@ from models import (
     BlameBlock,
     CommitSummary,
     HistoryContext,
+    PRDiscussionSummary,
 )
+
+# Import GitHub client (optional)
+try:
+    from github_client import GitHubClient, GitHubError
+    from github_utils import (
+        github_pr_to_pr_summary,
+        extract_pr_numbers_from_commits,
+        get_unique_prs,
+    )
+    GITHUB_AVAILABLE = True
+except ImportError:
+    GITHUB_AVAILABLE = False
+    GitHubClient = None
+    GitHubError = None
+    github_pr_to_pr_summary = None
+    extract_pr_numbers_from_commits = None
+    get_unique_prs = None
 
 
 class GitError(RuntimeError):
@@ -296,17 +314,23 @@ def get_blame_block(block_ref: BlockRef) -> BlameBlock:
     return BlameBlock(block_ref=block_ref, entries=entries)
 
 
-def get_commit_summaries_for_block(block_ref: BlockRef, max_commits: int = 10) -> Tuple[BlameBlock | None, List[CommitSummary]]:
+def get_commit_summaries_for_block(
+    block_ref: BlockRef,
+    max_commits: int = 10,
+    include_prs: bool = True,
+) -> Tuple[BlameBlock | None, List[CommitSummary]]:
     """Retrieve commit history for a code block.
 
     Gets blame information for the block, extracts unique commit SHAs,
     and fetches detailed commit information (author, date, message, diff)
-    for up to max_commits distinct commits.
+    for up to max_commits distinct commits. Optionally fetches associated
+    PR numbers from GitHub.
 
     Args:
         block_ref: BlockRef specifying the code block to analyze.
         max_commits: Maximum number of distinct commits to retrieve
             (default: 10).
+        include_prs: Whether to fetch PR numbers from GitHub (default: True).
 
     Returns:
         Tuple[BlameBlock | None, List[CommitSummary]]: A tuple containing:
@@ -334,6 +358,21 @@ def get_commit_summaries_for_block(block_ref: BlockRef, max_commits: int = 10) -
 
     shas = shas[:max_commits]
 
+    # Try to fetch PR numbers from GitHub if available
+    commit_to_pr_numbers: Dict[str, List[int]] = {}
+    if include_prs and GITHUB_AVAILABLE:
+        try:
+            github_client = GitHubClient()
+            commit_to_prs = github_client.get_prs_for_commits(
+                owner=block_ref.repo_owner,
+                repo=block_ref.repo_name,
+                commit_shas=shas,
+            )
+            commit_to_pr_numbers = extract_pr_numbers_from_commits(commit_to_prs)
+        except (GitHubError, Exception):
+            # If GitHub API fails, continue without PR numbers
+            pass
+
     summaries: List[CommitSummary] = []
     for sha in shas:
         meta_output = run_git([
@@ -354,6 +393,11 @@ def get_commit_summaries_for_block(block_ref: BlockRef, max_commits: int = 10) -
 
         diff_output = run_git(["show", sha, "--", block_ref.path], repo_path)
 
+        # Get PR numbers for this commit
+        pr_numbers = commit_to_pr_numbers.get(sha)
+        if pr_numbers and len(pr_numbers) == 0:
+            pr_numbers = None
+
         summaries.append(
             CommitSummary(
                 sha=full_sha,
@@ -362,40 +406,99 @@ def get_commit_summaries_for_block(block_ref: BlockRef, max_commits: int = 10) -
                 date=date,
                 message=message,
                 diff_hunks_for_block=[diff_output],
-                pr_numbers=None,
+                pr_numbers=pr_numbers,
             )
         )
 
     return blame_block, summaries
 
 
-def build_history_context(block_ref: BlockRef, max_commits: int = 10) -> HistoryContext:
+def build_history_context(
+    block_ref: BlockRef,
+    max_commits: int = 10,
+    include_prs: bool = True,
+    max_prs: int = 10,
+) -> HistoryContext:
     """Build complete history context with blame and commit information.
 
     Aggregates git blame data and commit history for a code block into a
-    single HistoryContext model. Handles errors gracefully by returning
-    empty blame/commits if git operations fail.
+    single HistoryContext model. Optionally fetches PR discussions from GitHub.
+    Handles errors gracefully by returning empty blame/commits/PRs if operations fail.
 
     Args:
         block_ref: BlockRef specifying the code block to analyze.
         max_commits: Maximum number of commits to include in the history
             (default: 10).
+        include_prs: Whether to fetch PR discussions from GitHub (default: True).
+        max_prs: Maximum number of PRs to include (default: 10).
 
     Returns:
         HistoryContext: A model containing blame information, commit summaries,
-            and PR discussions (PRs currently empty, reserved for future use).
+            and PR discussions.
     """
     try:
-        blame_block, commits = get_commit_summaries_for_block(block_ref, max_commits=max_commits)
+        blame_block, commits = get_commit_summaries_for_block(
+            block_ref,
+            max_commits=max_commits,
+            include_prs=include_prs,
+        )
     except GitError:
         blame_block = None
         commits = []
+
+    # Fetch PR discussions if available
+    prs: List[PRDiscussionSummary] = []
+    if include_prs and GITHUB_AVAILABLE and commits:
+        try:
+            github_client = GitHubClient()
+            
+            # Get all commit SHAs
+            commit_shas = [commit.sha for commit in commits]
+            
+            # Get PRs for commits
+            commit_to_prs = github_client.get_prs_for_commits(
+                owner=block_ref.repo_owner,
+                repo=block_ref.repo_name,
+                commit_shas=commit_shas,
+            )
+            
+            # Get unique PRs
+            unique_prs = get_unique_prs(commit_to_prs)
+            
+            # Convert to PRDiscussionSummary and fetch discussions
+            for pr_data in unique_prs[:max_prs]:
+                try:
+                    pr_number = pr_data.get("number")
+                    if pr_number:
+                        # Fetch full discussion
+                        discussion = github_client.get_pr_discussion(
+                            owner=block_ref.repo_owner,
+                            repo=block_ref.repo_name,
+                            pr_number=pr_number,
+                            include_reviews=True,
+                            include_comments=True,
+                            max_comments=20,
+                        )
+                        
+                        # Convert to PRDiscussionSummary
+                        pr_summary = github_pr_to_pr_summary(
+                            pr_data=pr_data,
+                            discussion_data=discussion,
+                            max_comments=10,
+                        )
+                        prs.append(pr_summary)
+                except (GitHubError, Exception):
+                    # If we can't get PR discussion, skip it
+                    continue
+        except (GitHubError, Exception):
+            # If GitHub API fails, continue without PRs
+            pass
 
     return HistoryContext(
         block_ref=block_ref,
         blame=blame_block,
         commits=commits,
-        prs=[],
+        prs=prs,
     )
 
 

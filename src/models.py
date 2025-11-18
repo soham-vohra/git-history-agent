@@ -134,6 +134,107 @@ class HistoryContext(BaseModel):
         return self.model_dump()
 
 
+class LinearTeam(BaseModel):
+    """Model for Linear team information."""
+
+    id: str
+    key: str
+    name: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the LinearTeam model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the LinearTeam model.
+        """
+        return self.model_dump()
+
+
+class LinearLabel(BaseModel):
+    """Model for Linear label information."""
+
+    id: str
+    name: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the LinearLabel model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the LinearLabel model.
+        """
+        return self.model_dump()
+
+
+class LinearUser(BaseModel):
+    """Model for Linear user information."""
+
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the LinearUser model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the LinearUser model.
+        """
+        return self.model_dump()
+
+
+class LinearIssueState(BaseModel):
+    """Model for Linear issue state information."""
+
+    name: str
+    type: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the LinearIssueState model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the LinearIssueState model.
+        """
+        return self.model_dump()
+
+
+class LinearIssue(BaseModel):
+    """Model for Linear issue information."""
+
+    id: str
+    identifier: str
+    title: str
+    description: Optional[str] = None
+    state: Optional[LinearIssueState] = None
+    assignee: Optional[LinearUser] = None
+    creator: Optional[LinearUser] = None
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
+    url: Optional[str] = None
+    priority: Optional[int] = None
+    labels: List[LinearLabel] = Field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the LinearIssue model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the LinearIssue model.
+        """
+        return self.model_dump()
+
+
+class LinearIssueContext(BaseModel):
+    """Model for Linear issues related to a code block."""
+
+    block_ref: BlockRef
+    issues: List[LinearIssue] = Field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the LinearIssueContext model to a dictionary.
+
+        Returns:
+            Dict[str, Any]: A dictionary representation of the LinearIssueContext model.
+        """
+        return self.model_dump()
+
+
 __all__ = [
     "BlockRef",
     "CodeContext",
@@ -142,4 +243,10 @@ __all__ = [
     "CommitSummary",
     "PRDiscussionSummary",
     "HistoryContext",
+    "LinearTeam",
+    "LinearLabel",
+    "LinearUser",
+    "LinearIssueState",
+    "LinearIssue",
+    "LinearIssueContext",
 ]
