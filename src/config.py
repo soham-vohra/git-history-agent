@@ -18,12 +18,16 @@ class Settings:
     All environment-dependent configuration values are loaded here.
     Any module needing configuration should import from `settings`
     instead of accessing os.getenv directly.
+
+    Supabase configuration includes both anon and service role keys.
     """
     openai_api_key: str
     repo_base_dir: Path
 
     supabase_url: Optional[str] = None
     supabase_anon_key: Optional[str] = None
+    supabase_service_role_key: Optional[str] = None
+    demo_org_id: Optional[str] = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -47,12 +51,16 @@ class Settings:
         # --- Supabase (optional for now) ---
         supabase_url = os.getenv("SUPABASE_URL") or None
         supabase_anon_key = os.getenv("SUPABASE_ANON_KEY") or None
+        supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or None
+        demo_org_id = os.getenv("DEMO_ORG_ID") or None
 
         return cls(
             openai_api_key=openai_api_key,
             repo_base_dir=repo_base_dir,
             supabase_url=supabase_url,
             supabase_anon_key=supabase_anon_key,
+            supabase_service_role_key=supabase_service_role_key,
+            demo_org_id=demo_org_id,
         )
 
 
